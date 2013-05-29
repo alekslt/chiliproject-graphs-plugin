@@ -1,5 +1,5 @@
 require 'SVG/Graph/TimeSeries'
-
+#require 'Engines::RailsExtensions::AssetHelpers'
 class GraphsController < ApplicationController
 
     unloadable
@@ -12,12 +12,12 @@ class GraphsController < ApplicationController
 
     before_filter :authorize_global, :except => [:recent_status_changes_graph, :recent_assigned_to_changes_graph]
     before_filter :find_version, :only => [:target_version_graph]
+    before_filter :find_version, :only => [:target_version_status_graph]
     before_filter :confirm_issues_exist, :only => [:issue_growth]
     before_filter :find_optional_project, :only => [:issue_growth_graph]
     before_filter :find_open_issues, :only => [:old_issues, :issue_age_graph]
 
     helper IssuesHelper
-
 
     ############################################################################
     # My Page block graphs
@@ -103,7 +103,7 @@ class GraphsController < ApplicationController
             :show_data_points => false,
             :show_data_values => false,
             :stagger_x_labels => true,
-            :style_sheet => "/plugin_assets/chiliproject-graphs-plugin/stylesheets/issue_growth.css",
+            :style_sheet => plugin_asset_path('chiliproject-graphs-plugin', 'stylesheets', 'issue_growth.css'),
             :width => 720,
             :x_label_format => "%Y-%m-%d"
         })
@@ -165,7 +165,7 @@ class GraphsController < ApplicationController
             :show_data_points => false,
             :show_data_values => false,
             :stagger_x_labels => true,
-            :style_sheet => "/plugin_assets/chiliproject-graphs-plugin/stylesheets/issue_age.css",
+            :style_sheet => plugin_asset_path('chiliproject-graphs-plugin', 'stylesheets', 'issue_age.css'),
             :width => 720,
             :x_label_format => "%b %d"
         })
@@ -213,7 +213,7 @@ class GraphsController < ApplicationController
             :show_data_points => true,
             :show_data_values => false,
             :stagger_x_labels => true,
-            :style_sheet => "/plugin_assets/chiliproject-graphs-plugin/stylesheets/target_version.css",
+            :style_sheet => plugin_asset_path('chiliproject-graphs-plugin', 'stylesheets', 'target_version.css'),
             :width => 800,
             :x_label_format => "%b %d"
         })
@@ -264,6 +264,79 @@ class GraphsController < ApplicationController
     end
 
 
+
+
+
+    # Displays open and total issue counts over time
+    def target_version_status_graph
+
+        # Initialize the graph
+        graph = SVG::Graph::TimeSeries.new({
+            :area_fill => true,
+            :height => 300,
+            :no_css => true,
+            :show_x_guidelines => true,
+            :scale_x_integers => true,
+            :scale_y_integers => true,
+            :show_data_points => true,
+            :show_data_values => false,
+            :stagger_x_labels => true,
+            :style_sheet => plugin_asset_path('chiliproject-graphs-plugin', 'stylesheets', 'target_version.css'),
+            :width => 800,
+            :x_label_format => "%y %b %d",
+            :stacked => true
+        })
+
+
+        # Group issues
+        issues_by_created_on = @version.fixed_issues.group_by {|issue| issue.created_on.to_date }.sort
+        issues_by_updated_on = @version.fixed_issues.group_by {|issue| issue.updated_on.to_date }.sort
+        
+	#debugger
+	issues_by_closed_on = @version.fixed_issues.collect {|issue| issue }.compact.group_by {|issue| issue.updated_on.to_date }.sort
+
+        # Set the scope of the graph
+        scope_end_date = issues_by_updated_on.last.first
+        scope_end_date = @version.effective_date if !@version.effective_date.nil? && @version.effective_date > scope_end_date
+        scope_end_date = Date.today if !@version.completed?
+        line_end_date = Date.today
+        line_end_date = scope_end_date if scope_end_date < line_end_date
+
+        # Generate the created_on line
+        created_count = 0
+        created_on_line = Hash.new
+        issues_by_created_on.each { |created_on, issues| created_on_line[(created_on-1).to_s] = created_count; created_count += issues.size; created_on_line[created_on.to_s] = created_count }
+        created_on_line[scope_end_date.to_s] = created_count
+        graph.add_data({
+            :data => created_on_line.sort.flatten,
+            :title => l(:label_total).capitalize
+        })
+
+        # Generate the closed_on line
+        closed_count = 0
+        closed_on_line = Hash.new
+        issues_by_closed_on.each { |closed_on, issues| closed_on_line[(closed_on-1).to_s] = closed_count; closed_count += issues.size; closed_on_line[closed_on.to_s] = closed_count }
+        closed_on_line[line_end_date.to_s] = closed_count
+        graph.add_data({
+            :data => closed_on_line.sort.flatten,
+            :title => l(:label_closed_issues).capitalize
+        })
+
+        # Add the version due date marker
+        graph.add_data({
+            :data => [@version.effective_date.to_s, created_count],
+            :title => l(:field_due_date).capitalize
+        }) unless @version.effective_date.nil?
+
+        # Compile the graph
+        headers["Content-Type"] = "image/svg+xml"
+        send_data(graph.burn, :type => "image/svg+xml", :disposition => "inline")
+    end
+
+
+
+
+
     ############################################################################
     # Private methods
     ############################################################################
@@ -308,4 +381,11 @@ class GraphsController < ApplicationController
     rescue ActiveRecord::RecordNotFound
         render_404
     end
+
+    # Returns the publicly-addressable relative URI for the given asset, type and plugin
+    def plugin_asset_path(plugin_name, type, asset)
+        raise "No plugin called '#{plugin_name}' - please use the full name of a loaded plugin." if Engines.plugins[plugin_name].nil?
+        "#{ActionController::Base.relative_url_root}/#{Engines.plugins[plugin_name].public_asset_directory}/#{type}/#{asset}"
+    end
+
 end

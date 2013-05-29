@@ -5,6 +5,11 @@ class TargetVersionGraphHook < Redmine::Hook::ViewListener
   		output = "<fieldset id='target_version_graph'><legend>#{ l(:label_graphs_total_vs_closed_issues) }</legend>"
 		output << tag("embed", :width => "100%", :height => 300, :type => "image/svg+xml", :src => url_for(:controller => 'graphs', :action => 'target_version_graph', :id => context[:version]))
 		output << "</fieldset>"
+
+                output = "<fieldset id='target_version_graph'><legend>#{ l(:label_graphs_status) }</legend>"
+                output << tag("embed", :width => "100%", :height => 300, :type => "image/svg+xml", :src => url_for(:controller => 'graphs', :action => 'target_version_status_graph', :id => context[:version]))
+                output << "</fieldset>"
+
 		return output
 	end 
   end
