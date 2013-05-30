@@ -281,10 +281,9 @@ class GraphsController < ApplicationController
             :show_data_points => true,
             :show_data_values => false,
             :stagger_x_labels => true,
-            :style_sheet => plugin_asset_path('chiliproject-graphs-plugin', 'stylesheets', 'target_version.css'),
+            :style_sheet => plugin_asset_path('chiliproject-graphs-plugin', 'stylesheets', 'target_state.css'),
             :width => 800,
             :x_label_format => "%y %b %d",
-            :stacked => true
         })
 
 
@@ -292,8 +291,58 @@ class GraphsController < ApplicationController
         issues_by_created_on = @version.fixed_issues.group_by {|issue| issue.created_on.to_date }.sort
         issues_by_updated_on = @version.fixed_issues.group_by {|issue| issue.updated_on.to_date }.sort
         
-	#debugger
-	issues_by_closed_on = @version.fixed_issues.collect {|issue| issue }.compact.group_by {|issue| issue.updated_on.to_date }.sort
+	    #debugger
+	    issues_by_closed_on = @version.fixed_issues.collect {|issue| issue }.compact.group_by {|issue| issue.updated_on.to_date }.sort
+
+
+        issues_by_date_status = {}
+        issues_by_status_date = {}
+        
+        @version.fixed_issues.each { |issue|
+            puts "IssueId: #{issue.id}\n"
+            issue_status = issue_history(issue)
+            puts "IssueStatuses: #{issue_status}\n"
+
+            issue_status.each do |date, status|
+                parsedDate = date
+                from_state = status["status"][:old]
+                to_state = status["status"][:new]
+                puts "    Date: #{parsedDate} (#{parsedDate.class}) ||  New State=#{to_state} \n"
+
+                issues_by_date_status[parsedDate] ||= {}
+                issues_by_status_date[from_state] ||= {}
+                issues_by_status_date[to_state] ||= {}
+
+
+                if issues_by_date_status[parsedDate].has_key?(from_state)
+                    issues_by_date_status[parsedDate][from_state] -= 1
+                else
+                    issues_by_date_status[parsedDate][from_state] = -1
+                end
+
+                if issues_by_date_status[parsedDate].has_key?(to_state)
+                    issues_by_date_status[parsedDate][to_state] += 1
+                else
+                    issues_by_date_status[parsedDate][to_state] = 1
+                end
+
+                if issues_by_status_date[from_state].has_key?(parsedDate)
+                    issues_by_status_date[from_state][parsedDate] -= 1
+                else
+                    issues_by_status_date[from_state][parsedDate] = -1
+                end
+
+                if issues_by_status_date[to_state].has_key?(parsedDate)
+                    issues_by_status_date[to_state][parsedDate] += 1
+                else
+                    issues_by_status_date[to_state][parsedDate] = 1
+                end
+            end
+        }
+
+        
+        curr_issue = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+
 
         # Set the scope of the graph
         scope_end_date = issues_by_updated_on.last.first
@@ -302,35 +351,129 @@ class GraphsController < ApplicationController
         line_end_date = Date.today
         line_end_date = scope_end_date if scope_end_date < line_end_date
 
+        scope_start_date = @version.start_date
+
+        issues_by_status_sum = {}
+
+        (scope_start_date..scope_end_date).each do |date_today|
+            if issues_by_date_status.has_key?(date_today)
+                puts "Date: #{date_today}\n"
+
+                issues_by_date_status[date_today].each do |status, diff|
+                    curr_issue[status] += diff
+                end
+            end
+
+            issues_by_status_sum[date_today] ||= {}
+
+            issues_by_status_date.each do |issue_id, statecount|
+                curr_total = curr_issue[issue_id]
+                issues_by_status_sum[date_today][issue_id] = curr_issue[issue_id]
+            end
+
+        end
+
+
+
+        debugger
+        
+        created_count = 5
+        issues_by_status_sum.each do |date, status_and_count|
+            
+            status_line = Hash.new
+            date_and_count.each do |changed_on, num| 
+            #    status_line[(created_on-1).to_s] = created_count;
+            #    created_count += issues.size;
+                if scope_start_date.nil? || scope_start_date <= changed_on
+                    day = changed_on
+                    puts "Day: #{day}\n"
+                    status_line[day] = num
+                    #created_count += num
+                end  
+            end
+            #status_line[scope_end_date.to_s] = created_count
+            
+            graph.add_data({
+                :data => status_line.sort.flatten,
+                :title => status.to_s
+            })
+        
+        end
+
         # Generate the created_on line
-        created_count = 0
-        created_on_line = Hash.new
-        issues_by_created_on.each { |created_on, issues| created_on_line[(created_on-1).to_s] = created_count; created_count += issues.size; created_on_line[created_on.to_s] = created_count }
-        created_on_line[scope_end_date.to_s] = created_count
-        graph.add_data({
-            :data => created_on_line.sort.flatten,
-            :title => l(:label_total).capitalize
-        })
+        #created_count = 0
+        #created_on_line = Hash.new
+        #issues_by_created_on.each { |created_on, issues| created_on_line[(created_on-1).to_s] = created_count; created_count += issues.size; created_on_line[created_on.to_s] = created_count }
+        #created_on_line[scope_end_date.to_s] = created_count
+        #graph.add_data({
+        #    :data => created_on_line.sort.flatten,
+        #    :title => l(:label_total).capitalize
+        #})
 
         # Generate the closed_on line
-        closed_count = 0
-        closed_on_line = Hash.new
-        issues_by_closed_on.each { |closed_on, issues| closed_on_line[(closed_on-1).to_s] = closed_count; closed_count += issues.size; closed_on_line[closed_on.to_s] = closed_count }
-        closed_on_line[line_end_date.to_s] = closed_count
-        graph.add_data({
-            :data => closed_on_line.sort.flatten,
-            :title => l(:label_closed_issues).capitalize
-        })
+        #closed_count = 0
+        #closed_on_line = Hash.new
+        #issues_by_closed_on.each { |closed_on, issues| closed_on_line[(closed_on-1).to_s] = closed_count; closed_count += issues.size; closed_on_line[closed_on.to_s] = closed_count }
+        #closed_on_line[line_end_date.to_s] = closed_count
+        #graph.add_data({
+        #    :data => closed_on_line.sort.flatten,
+        #    :title => l(:label_closed_issues).capitalize
+        #})
 
         # Add the version due date marker
         graph.add_data({
-            :data => [@version.effective_date.to_s, created_count],
+            :data => [@version.effective_date.to_s, 2],
             :title => l(:field_due_date).capitalize
         }) unless @version.effective_date.nil?
 
         # Compile the graph
         headers["Content-Type"] = "image/svg+xml"
         send_data(graph.burn, :type => "image/svg+xml", :disposition => "inline")
+    end
+
+
+
+
+
+
+
+    ###
+    # Journal History stuff #
+
+    def issue_history(issue)
+   
+        full_journal = {}
+        issue.journals.each{|journal|
+            date = journal.created_on.to_date
+
+            ## TODO: SKIP estimated_hours and remaining_hours if not a leaf node
+            journal.details.each{| prop, value |
+                next unless ['status_id'].include?(prop)
+
+                full_journal[date] ||= {}
+
+                case prop
+                when "status_id"
+                    full_journal[date]["status"] = {:old => value[0], :new => value[1]}
+                else
+                  raise "Unhandled property #{prop}"
+                end
+            }
+
+        }
+        return full_journal        
+    end
+
+    def statuses
+        Hash.new{|h, k|
+            s = IssueStatus.find_by_id(k.to_i)
+            if s.nil?
+                s = IssueStatus.default
+                puts "IssueStatus #{k.inspect} not found, using default #{s.id} instead"
+            end
+            h[k] = {:id => s.id, :open => ! s.is_closed?, :success => s.is_closed? ? (s.default_done_ratio.nil? || s.default_done_ratio == 100) : false }
+            h[k]
+        }
     end
 
 
