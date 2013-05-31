@@ -316,9 +316,9 @@ class GraphsController < ApplicationController
 
                 status_changes["status"].each do | status |
                     
-                    from_state = status[:old]
-                    to_state = status[:new]
-                    #puts "    Date: #{parsedDate} (#{parsedDate.class}) ||  New State=#{to_state} \n"
+                    from_state = Integer(status[:old])
+                    to_state = Integer(status[:new])
+                    #puts "    Date: #{parsedDate} (#{parsedDate.class}) ||  State: #{from_state} => #{to_state} \n"
                     
                     issues_by_status_date[from_state] ||= {}
                     issues_by_status_date[to_state] ||= {}
@@ -330,7 +330,11 @@ class GraphsController < ApplicationController
                     end
 
                     if issues_by_date_status[parsedDate].has_key?(to_state)
-                        issues_by_date_status[parsedDate][to_state] += 1
+                        if from_state == to_state
+                            issues_by_date_status[parsedDate][to_state] = 1
+                        else
+                            issues_by_date_status[parsedDate][to_state] += 1
+                        end
                     else
                         issues_by_date_status[parsedDate][to_state] = 1
                     end
@@ -422,7 +426,7 @@ class GraphsController < ApplicationController
         
 
         created_count = 5
-
+#           [5].each do |status_id|
         sorted_status.reverse.each do |status_id|
             next if status_id == -1
 
@@ -458,32 +462,11 @@ class GraphsController < ApplicationController
 
         end
 
-
-        # Generate the created_on line
-        #created_count = 0
-        #created_on_line = Hash.new
-        #issues_by_created_on.each { |created_on, issues| created_on_line[(created_on-1).to_s] = created_count; created_count += issues.size; created_on_line[created_on.to_s] = created_count }
-        #created_on_line[scope_end_date.to_s] = created_count
-        #graph.add_data({
-        #    :data => created_on_line.sort.flatten,
-        #    :title => l(:label_total).capitalize
-        #})
-
-        # Generate the closed_on line
-        #closed_count = 0
-        #closed_on_line = Hash.new
-        #issues_by_closed_on.each { |closed_on, issues| closed_on_line[(closed_on-1).to_s] = closed_count; closed_count += issues.size; closed_on_line[closed_on.to_s] = closed_count }
-        #closed_on_line[line_end_date.to_s] = closed_count
-        #graph.add_data({
-        #    :data => closed_on_line.sort.flatten,
-        #    :title => l(:label_closed_issues).capitalize
-        #})
-
         # Add the version due date marker
-        graph.add_data({
-            :data => [@version.effective_date.to_s, 2],
-            :title => l(:field_due_date).capitalize
-        }) unless @version.effective_date.nil?
+        #graph.add_data({
+        #    :data => [@version.effective_date.to_s, created_count],
+        #    :title => l(:field_due_date).capitalize
+        #}) unless @version.effective_date.nil?
 
         # Compile the graph
         headers["Content-Type"] = "image/svg+xml"
