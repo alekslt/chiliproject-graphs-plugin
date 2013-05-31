@@ -270,10 +270,29 @@ class GraphsController < ApplicationController
     # Displays open and total issue counts over time
     def target_version_status_graph
 
+        size='small'
+        size = params[:size] if params.has_key?(:size)
+
+        height = 300
+        width = 800
+
+
+        case size
+        when 'small'
+            # Defaults
+        when 'large'
+            height = 500
+            width = 1333
+         when 'large-hd'
+            height = 712
+            width = 1900
+        end
+
         # Initialize the graph
         graph = SVG::Graph::TimeSeries.new({
             :area_fill => true,
-            :height => 300,
+            :height => height,
+            :width => width,
             :no_css => true,
             :show_x_guidelines => true,
             :scale_x_integers => true,
@@ -281,19 +300,14 @@ class GraphsController < ApplicationController
             :show_data_points => false,
             :show_data_values => false,
             :stagger_x_labels => true,
+            :min_y_value => 0,
             :style_sheet => plugin_asset_path('chiliproject-graphs-plugin', 'stylesheets', 'target_state.css'),
-            :width => 800,
+
             :x_label_format => "%Y %b %d",
         })
 
-
-        # Group issues
-        issues_by_created_on = @version.fixed_issues.group_by {|issue| issue.created_on.to_date }.sort
-        issues_by_updated_on = @version.fixed_issues.group_by {|issue| issue.updated_on.to_date }.sort
-        
-	    #debugger
-	    issues_by_closed_on = @version.fixed_issues.collect {|issue| issue }.compact.group_by {|issue| issue.updated_on.to_date }.sort
-
+        curr_status = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+        sorted_status = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]
 
         issues_by_date_status = {}
         issues_by_status_date = {}
@@ -356,9 +370,7 @@ class GraphsController < ApplicationController
         }
 
         
-        curr_status = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 
-        sorted_status = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]
 
         issues_by_status_date.sort.each do |status_id, statecount|
             next if status_id == 0
@@ -369,15 +381,23 @@ class GraphsController < ApplicationController
         sorted_status = sorted_status.reverse
 
         #puts "Sorts by: #{sorted_status.inspect}\n"
+
         # Set the scope of the graph
+        issues_by_updated_on = @version.fixed_issues.group_by {|issue| issue.updated_on.to_date }.sort
         scope_end_date = issues_by_updated_on.last.first
         scope_end_date = @version.effective_date if !@version.effective_date.nil? && @version.effective_date > scope_end_date
         scope_end_date = Date.today if !@version.completed?
+       
+        scope_start_date = @version.start_date
+        if params.has_key?(:lastdays)
+            lastdate = (scope_end_date-Integer(params[:lastdays]))
+            scope_start_date = lastdate
+        end
+        
         line_end_date = Date.today
         line_end_date = scope_end_date if scope_end_date < line_end_date
-
-        scope_start_date = @version.start_date
-
+        
+        
         issues_by_date_status_sum = {}
 
         #puts "Calculating from #{earliest_issue_date} to  #{scope_end_date}\n"
@@ -424,9 +444,6 @@ class GraphsController < ApplicationController
 
         end
         
-
-        created_count = 5
-#           [5].each do |status_id|
         sorted_status.reverse.each do |status_id|
             next if status_id == -1
 
@@ -434,24 +451,16 @@ class GraphsController < ApplicationController
 
             status_line = Hash.new
             date_and_count.each do |changed_on, num|
-                #puts "status_id: #{status_id} :: #{changed_on} = num\n"
-            #    status_line[(created_on-1).to_s] = created_count;
-            #    created_count += issues.size;
                 if scope_start_date.nil? || scope_start_date <= changed_on
                     day = changed_on.to_s
-                    #puts "Day: #{day}\n"
                     status_line[day] = num
-                    #created_count += num
                 end  
             end
 
             next if status_line.count == 0
 
-            #status_line[scope_end_date.to_s] = created_count
             status_instance = IssueStatus.find_by_id(status_id)
-            
             status_text = "Unknown: #{status_id}"
-
             status_text = status_instance.name unless status_instance.nil?
 
             puts "Line(#{status_id} : #{status_text}"
@@ -463,6 +472,7 @@ class GraphsController < ApplicationController
         end
 
         # Add the version due date marker
+        # created_count = 5
         #graph.add_data({
         #    :data => [@version.effective_date.to_s, created_count],
         #    :title => l(:field_due_date).capitalize
