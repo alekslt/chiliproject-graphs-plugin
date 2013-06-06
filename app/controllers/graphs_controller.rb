@@ -11,8 +11,7 @@ class GraphsController < ApplicationController
     menu_item :issues, :only => [:issue_growth, :old_issues]
 
     before_filter :authorize_global, :except => [:recent_status_changes_graph, :recent_assigned_to_changes_graph]
-    before_filter :find_version, :only => [:target_version_graph]
-    before_filter :find_version, :only => [:target_version_status_graph]
+    before_filter :find_version, :only => [:target_version_graph, :target_version_status_graph, :target_version_status_graphjs]
     before_filter :confirm_issues_exist, :only => [:issue_growth]
     before_filter :find_optional_project, :only => [:issue_growth_graph]
     before_filter :find_open_issues, :only => [:old_issues, :issue_age_graph]
@@ -484,6 +483,189 @@ class GraphsController < ApplicationController
     end
 
 
+
+    def target_version_status_graphjs
+        size='small'
+        size = params[:size] if params.has_key?(:size)
+
+        height = 300
+        width = 800
+
+
+        case size
+        when 'small'
+            # Defaults
+        when 'large'
+            height = 500
+            width = 1333
+         when 'large-hd'
+            height = 712
+            width = 1900
+        end
+
+
+        curr_status = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+        sorted_status = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]
+
+        issues_by_date_status = {}
+        issues_by_status_date = {}
+        
+        earliest_issue_date = Date.today
+
+        @version.fixed_issues.each { |issue|
+            #puts "IssueId: #{issue.id}\n"
+            issue_status = issue_history(issue)
+            #puts "IssueStatuses: #{issue_status}\n"
+
+            issue_status.each do |date, status_changes|
+                parsedDate = date
+
+                if parsedDate < earliest_issue_date
+                    earliest_issue_date = parsedDate
+                end
+
+                issues_by_date_status[parsedDate] ||= {}
+
+                status_changes["status"].each do | status |
+                    
+                    from_state = Integer(status[:old])
+                    to_state = Integer(status[:new])
+                    #puts "    Date: #{parsedDate} (#{parsedDate.class}) ||  State: #{from_state} => #{to_state} \n"
+                    
+                    issues_by_status_date[from_state] ||= {}
+                    issues_by_status_date[to_state] ||= {}
+
+                    if issues_by_date_status[parsedDate].has_key?(from_state)
+                        issues_by_date_status[parsedDate][from_state] -= 1
+                    else
+                        issues_by_date_status[parsedDate][from_state] = -1
+                    end
+
+                    if issues_by_date_status[parsedDate].has_key?(to_state)
+                        if from_state == to_state
+                            issues_by_date_status[parsedDate][to_state] = 1
+                        else
+                            issues_by_date_status[parsedDate][to_state] += 1
+                        end
+                    else
+                        issues_by_date_status[parsedDate][to_state] = 1
+                    end
+
+                    if issues_by_status_date[from_state].has_key?(parsedDate)
+                        issues_by_status_date[from_state][parsedDate] -= 1
+                    else
+                        issues_by_status_date[from_state][parsedDate] = -1
+                    end
+
+                    if issues_by_status_date[to_state].has_key?(parsedDate)
+                        issues_by_status_date[to_state][parsedDate] += 1
+                    else
+                        issues_by_status_date[to_state][parsedDate] = 1
+                    end
+                    #puts "    Arr: #{issues_by_date_status[parsedDate].inspect}\n"
+                end
+            end
+        }
+
+        
+
+
+        issues_by_status_date.sort.each do |status_id, statecount|
+            next if status_id == 0
+            sobj = IssueStatus.find_by_id(status_id)
+            sorted_status[sobj.position] = status_id
+        end
+
+        @sorted_status = sorted_status.reverse
+
+        #puts "Sorts by: #{sorted_status.inspect}\n"
+
+        # Set the scope of the graph
+        issues_by_updated_on = @version.fixed_issues.group_by {|issue| issue.updated_on.to_date }.sort
+        scope_end_date = issues_by_updated_on.last.first
+        scope_end_date = @version.effective_date if !@version.effective_date.nil? && @version.effective_date > scope_end_date
+        scope_end_date = Date.today if !@version.completed?
+       
+        scope_start_date = @version.start_date
+        if params.has_key?(:lastdays)
+            lastdate = (scope_end_date-Integer(params[:lastdays]))
+            scope_start_date = lastdate
+        end
+        
+        line_end_date = Date.today
+        line_end_date = scope_end_date if scope_end_date < line_end_date
+        
+        
+        issues_by_date_status_sum = {}
+
+        #puts "Calculating from #{earliest_issue_date} to  #{scope_end_date}\n"
+
+        (earliest_issue_date..scope_end_date).each do |date_today|
+            #puts "Date: #{date_today}\n"
+            if issues_by_date_status.has_key?(date_today)
+                issues_by_date_status[date_today].each do |status, diff|
+                    next if status == 0
+                    curr_status[status] += diff
+                end
+            end
+
+            issues_by_date_status_sum[date_today] ||= {}
+
+            @sorted_status.each do |status_id|
+                next if status_id == -1
+                #puts "  S_id: #{status_id} = #{curr_total}\n"
+                issues_by_date_status_sum[date_today][status_id] = curr_status[status_id]
+            end
+
+        end
+
+        @issues_by_status_date_sum = {}
+
+        issues_by_date_status_sum.each do |date, status_and_count|
+
+            status_and_count.each do |status_id, num|
+                if status_id != 0
+                    @issues_by_status_date_sum[status_id] ||= {}
+                    @issues_by_status_date_sum[status_id][date] = num
+                end
+            end
+
+
+        end
+        
+
+        @sorted_status.reverse.each do |status_id|
+            next if status_id == -1
+
+            date_and_count = @issues_by_status_date_sum[status_id]
+
+            status_line = Hash.new
+            date_and_count.each do |changed_on, num|
+                if scope_start_date.nil? || scope_start_date <= changed_on
+                    day = changed_on.to_s
+                    status_line[day] = num
+                end  
+            end
+
+            next if status_line.count == 0
+
+            status_instance = IssueStatus.find_by_id(status_id)
+            status_text = "Unknown: #{status_id}"
+            status_text = status_instance.name unless status_instance.nil?
+
+            puts "Line(#{status_id} : #{status_text}"
+
+            #graph.add_data({
+            #    :data => status_line.sort.flatten,
+            #    :title => status_text
+            #})
+
+        end
+
+        # Compile the graph
+        headers["Content-Type"] = "text/html"
+        render :layout => false
+    end
 
 
     ###
