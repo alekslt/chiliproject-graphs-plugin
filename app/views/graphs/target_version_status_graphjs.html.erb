@@ -2,56 +2,257 @@
 <html>
 <head>
 
+<%= stylesheet_link_tag('smoothness/jquery-ui', :media => 'all') %>
 <%= stylesheet_link_tag('rickshaw/rickshaw.min.css', :plugin => 'chiliproject-graphs-plugin') %>
+<%= stylesheet_link_tag('rickshaw/extensions.css', :plugin => 'chiliproject-graphs-plugin') %>
 <%= javascript_include_tag('rickshaw/vendor/d3.min.js', :plugin => 'chiliproject-graphs-plugin') %>
 <%= javascript_include_tag('rickshaw/vendor/d3.layout.min.js', :plugin => 'chiliproject-graphs-plugin') %>
 <%= javascript_include_tag('rickshaw/rickshaw.min.js', :plugin => 'chiliproject-graphs-plugin') %>
-
+<%= javascript_include_tag 'jquery.min.js' %>
+<%= javascript_include_tag 'jquery-ui.min.js' %>
 <style>
 
-#chart_container {
-        display: inline-block;
-        font-family: Arial, Helvetica, sans-serif;
+label[for=area] {
+        background: url(<%= image_path('om_stack.png', :plugin => 'chiliproject-graphs-plugin') %>);
 }
-#chart {
-        float: left;
+label[for=line] {
+        background: url(<%= image_path('om_lines.png', :plugin => 'chiliproject-graphs-plugin') %>);
 }
-#legend {
-        float: left;
-        margin-left: 15px;
+label[for=bar] {
+        background: url(<%= image_path('om_bar.png', :plugin => 'chiliproject-graphs-plugin') %>);
 }
-#offset_form {
-        float: left;
-        margin: 2em 0 0 15px;
-        font-size: 13px;
+label[for=scatter] {
+        background: url(<%= image_path('om_scatter.png', :plugin => 'chiliproject-graphs-plugin') %>);
 }
-#y_axis {
-        float: left;
-        width: 40px;
+
+label[for=stack] {
+        background-image: url(<%= image_path('offset_stack.png', :plugin => 'chiliproject-graphs-plugin') %>);
 }
+label[for=pct] {
+        background-image: url(<%= image_path('offset_pct.png', :plugin => 'chiliproject-graphs-plugin') %>);
+}
+label[for=stream] {
+        background-image: url(<%= image_path('offset_stream.png', :plugin => 'chiliproject-graphs-plugin') %>);
+}
+label[for=value] {
+        background-image: url(<%= image_path('offset_value.png', :plugin => 'chiliproject-graphs-plugin') %>);
+}
+label[for=cardinal] {
+        background-image: url(<%= image_path('interp_cardinal.png', :plugin => 'chiliproject-graphs-plugin') %>);
+}
+label[for=linear] {
+        background-image: url(<%= image_path('interp_linear.png', :plugin => 'chiliproject-graphs-plugin') %>);
+}
+label[for=step] {
+        background-image: url(<%= image_path('interp_step.png', :plugin => 'chiliproject-graphs-plugin') %>);
+}
+
 </style>
 </head>
 
 <body>
-<div id="chart_container">
-        <div id="y_axis"></div>
-        <div id="chart"></div>
-        <form id="offset_form" class="toggler">
-                <input type="radio" name="offset" id="lines" value="lines">
-                <label class="lines" for="lines">lines</label><br>
-                <input type="radio" name="offset" id="stack" value="zero" checked>
-                <label class="stack" for="stack">stack</label>
+<div id="content">
+         <div id="chart_container">
+                <div id="chart"></div>
+                <div id="timeline"></div>
+        </div>
+
+        <form id="side_panel">
+                <section><div id="legend"></div></section>
+                <section>
+                        <div id="renderer_form" class="toggler">
+                                <input type="radio" name="renderer" id="area" value="area" checked>
+                                <label for="area">area</label>
+                                <input type="radio" name="renderer" id="bar" value="bar">
+                                <label for="bar">bar</label>
+                                <input type="radio" name="renderer" id="line" value="line">
+                                <label for="line">line</label>
+                                <input type="radio" name="renderer" id="scatter" value="scatterplot">
+                                <label for="scatter">scatter</label>
+                        </div>
+                </section>
+                <section>
+                <div id="offset_form">
+                        <label for="stack">
+                                <input type="radio" name="offset" id="stack" value="zero" checked>
+                                <span>stack</span>
+                        </label>
+                        <label for="stream">
+                                <input type="radio" name="offset" id="stream" value="wiggle">
+                                <span>stream</span>
+                        </label>
+                        <label for="pct">
+                                <input type="radio" name="offset" id="pct" value="expand">
+                                <span>pct</span>
+                        </label>
+                        <label for="value">
+                                <input type="radio" name="offset" id="value" value="value">
+                                <span>value</span>
+                        </label>
+                </div>
+                        <div id="interpolation_form">
+                                <label for="cardinal">
+                                        <input type="radio" name="interpolation" id="cardinal" value="cardinal" checked>
+                                        <span>cardinal</span>
+                                </label>
+                                <label for="linear">
+                                        <input type="radio" name="interpolation" id="linear" value="linear">
+                                        <span>linear</span>
+                                </label>
+                                <label for="step">
+                                        <input type="radio" name="interpolation" id="step" value="step-after">
+                                        <span>step</span>
+                                </label>
+                        </div>
+                </section>
+                <section>
+                        <h6>Smoothing</h6>
+                        <div id="smoother"></div>
+                </section>
+                <section></section>
         </form>
 </div>
-<div id="legend"></div>
 <script>
+var RenderControls = function(args) {
+
+        this.initialize = function() {
+
+                this.element = args.element;
+                this.graph = args.graph;
+                this.settings = this.serialize();
+
+                this.inputs = {
+                        renderer: this.element.elements.renderer,
+                        interpolation: this.element.elements.interpolation,
+                        offset: this.element.elements.offset
+                };
+
+                this.element.addEventListener('change', function(e) {
+
+                        this.settings = this.serialize();
+
+                        if (e.target.name == 'renderer') {
+                                this.setDefaultOffset(e.target.value);
+                        }
+
+                        this.syncOptions();
+                        this.settings = this.serialize();
+
+                        var config = {
+                                renderer: this.settings.renderer,
+                                interpolation: this.settings.interpolation
+                        };
+
+                        if (this.settings.offset == 'value') {
+                                config.unstack = true;
+                                config.offset = 'zero';
+                        } else if (this.settings.offset == 'expand') {
+                                config.unstack = false;
+                                config.offset = this.settings.offset;
+                        } else {
+                                config.unstack = false;
+                                config.offset = this.settings.offset;
+                        }
+
+                        this.graph.configure(config);
+                        this.graph.render();
+
+                }.bind(this), false);
+        }
+
+        this.serialize = function() {
+
+                var values = {};
+                var pairs = $(this.element).serializeArray();
+
+                pairs.forEach( function(pair) {
+                        values[pair.name] = pair.value;
+                } );
+
+                return values;
+        };
+
+        this.syncOptions = function() {
+
+                var options = this.rendererOptions[this.settings.renderer];
+
+                Array.prototype.forEach.call(this.inputs.interpolation, function(input) {
+
+                        if (options.interpolation) {
+                                input.disabled = false;
+                                input.parentNode.classList.remove('disabled');
+                        } else {
+                                input.disabled = true;
+                                input.parentNode.classList.add('disabled');
+                        }
+                });
+
+                Array.prototype.forEach.call(this.inputs.offset, function(input) {
+
+                        if (options.offset.filter( function(o) { return o == input.value } ).length) {
+                                input.disabled = false;
+                                input.parentNode.classList.remove('disabled');
+
+                        } else {
+                                input.disabled = true;
+                                input.parentNode.classList.add('disabled');
+                        }
+
+                }.bind(this));
+
+        };
+
+        this.setDefaultOffset = function(renderer) {
+
+                var options = this.rendererOptions[renderer];
+
+                if (options.defaults && options.defaults.offset) {
+
+                        Array.prototype.forEach.call(this.inputs.offset, function(input) {
+                                if (input.value == options.defaults.offset) {
+                                        input.checked = true;
+                                } else {
+                                        input.checked = false;
+                                }
+
+                        }.bind(this));
+                }
+        };
+
+        this.rendererOptions = {
+
+                area: {
+                        interpolation: true,
+                        offset: ['zero', 'wiggle', 'expand', 'value'],
+                        defaults: { offset: 'zero' }
+                },
+                line: {
+                        interpolation: true,
+                        offset: ['expand', 'value'],
+                        defaults: { offset: 'value' }
+                },
+                bar: {
+                        interpolation: false,
+                        offset: ['zero', 'wiggle', 'expand', 'value'],
+                        defaults: { offset: 'zero' }
+                },
+                scatterplot: {
+                        interpolation: false,
+                        offset: ['value'],
+                        defaults: { offset: 'value' }
+                }
+        };
+
+        this.initialize();
+};
+
         var palette = new Rickshaw.Color.Palette();
 
 var graph = new Rickshaw.Graph( {
         element: document.querySelector("#chart"),
         interpolation: 'linear',
-        width: 800,
-        height: 300,
+        width: <%= @width %>,
+        height: <%= @height %>,
 
         series: [
 
@@ -89,6 +290,62 @@ var graph = new Rickshaw.Graph( {
         ]
 } );
 
+graph.render();
+
+var hoverDetail = new Rickshaw.Graph.HoverDetail( {
+        graph: graph
+} );
+
+var legend = new Rickshaw.Graph.Legend( {
+        graph: graph,
+        element: document.getElementById('legend')
+
+} );
+
+var shelving = new Rickshaw.Graph.Behavior.Series.Toggle( {
+        graph: graph,
+        legend: legend
+} );
+
+var order = new Rickshaw.Graph.Behavior.Series.Order( {
+        graph: graph,
+        legend: legend
+} );
+
+var highlighter = new Rickshaw.Graph.Behavior.Series.Highlight( {
+        graph: graph,
+        legend: legend
+} );
+
+var smoother = new Rickshaw.Graph.Smoother( {
+        graph: graph,
+        element: $('#smoother')
+} );
+
+var ticksTreatment = 'glow';
+
+var xAxis = new Rickshaw.Graph.Axis.Time( {
+        graph: graph,
+        ticksTreatment: ticksTreatment
+} );
+
+xAxis.render();
+
+var yAxis = new Rickshaw.Graph.Axis.Y( {
+        graph: graph,
+        tickFormat: Rickshaw.Fixtures.Number.formatKMBT,
+        ticksTreatment: ticksTreatment
+} );
+
+yAxis.render();
+
+
+var controls = new RenderControls( {
+        element: document.querySelector('form'),
+        graph: graph
+} );
+
+/*
 var x_axis = new Rickshaw.Graph.Axis.Time( { 
         graph: graph,
         pixelsPerTick: 50
@@ -127,7 +384,7 @@ var hoverDetail = new Rickshaw.Graph.HoverDetail( {
 } );
 
 graph.render();
-
+*/
 </script>
 
 </body>

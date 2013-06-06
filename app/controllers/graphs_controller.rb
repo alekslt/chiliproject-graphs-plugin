@@ -488,19 +488,19 @@ class GraphsController < ApplicationController
         size='small'
         size = params[:size] if params.has_key?(:size)
 
-        height = 300
-        width = 800
+        @height = 300
+        @width = 700
 
 
         case size
         when 'small'
             # Defaults
         when 'large'
-            height = 500
-            width = 1333
+            @height = 500
+            @width = 1333
          when 'large-hd'
-            height = 712
-            width = 1900
+            @height = 712
+            @width = 1900
         end
 
 
@@ -582,25 +582,25 @@ class GraphsController < ApplicationController
 
         # Set the scope of the graph
         issues_by_updated_on = @version.fixed_issues.group_by {|issue| issue.updated_on.to_date }.sort
-        scope_end_date = issues_by_updated_on.last.first
-        scope_end_date = @version.effective_date if !@version.effective_date.nil? && @version.effective_date > scope_end_date
-        scope_end_date = Date.today if !@version.completed?
+        @scope_end_date = issues_by_updated_on.last.first
+        @scope_end_date = @version.effective_date if !@version.effective_date.nil? && @version.effective_date > @scope_end_date
+        @scope_end_date = Date.today if !@version.completed?
        
-        scope_start_date = @version.start_date
+        @scope_start_date = @version.start_date
         if params.has_key?(:lastdays)
-            lastdate = (scope_end_date-Integer(params[:lastdays]))
-            scope_start_date = lastdate
+            lastdate = (@scope_end_date-Integer(params[:lastdays]))
+            @scope_start_date = lastdate
         end
         
-        line_end_date = Date.today
-        line_end_date = scope_end_date if scope_end_date < line_end_date
+        @line_end_date = Date.today
+        @line_end_date = @scope_end_date if @scope_end_date < @line_end_date
         
         
         issues_by_date_status_sum = {}
 
         #puts "Calculating from #{earliest_issue_date} to  #{scope_end_date}\n"
 
-        (earliest_issue_date..scope_end_date).each do |date_today|
+        (earliest_issue_date..@scope_end_date).each do |date_today|
             #puts "Date: #{date_today}\n"
             if issues_by_date_status.has_key?(date_today)
                 issues_by_date_status[date_today].each do |status, diff|
@@ -634,33 +634,33 @@ class GraphsController < ApplicationController
         end
         
 
-        @sorted_status.reverse.each do |status_id|
-            next if status_id == -1
+        # @sorted_status.reverse.each do |status_id|
+        #     next if status_id == -1
 
-            date_and_count = @issues_by_status_date_sum[status_id]
+        #     date_and_count = @issues_by_status_date_sum[status_id]
 
-            status_line = Hash.new
-            date_and_count.each do |changed_on, num|
-                if scope_start_date.nil? || scope_start_date <= changed_on
-                    day = changed_on.to_s
-                    status_line[day] = num
-                end  
-            end
+        #     status_line = Hash.new
+        #     date_and_count.each do |changed_on, num|
+        #         if @scope_start_date.nil? || scope_start_date <= changed_on
+        #             day = changed_on.to_s
+        #             status_line[day] = num
+        #         end  
+        #     end
 
-            next if status_line.count == 0
+        #     next if status_line.count == 0
 
-            status_instance = IssueStatus.find_by_id(status_id)
-            status_text = "Unknown: #{status_id}"
-            status_text = status_instance.name unless status_instance.nil?
+        #     status_instance = IssueStatus.find_by_id(status_id)
+        #     status_text = "Unknown: #{status_id}"
+        #     status_text = status_instance.name unless status_instance.nil?
 
-            puts "Line(#{status_id} : #{status_text}"
+        #     puts "Line(#{status_id} : #{status_text}"
 
-            #graph.add_data({
-            #    :data => status_line.sort.flatten,
-            #    :title => status_text
-            #})
+        #     #graph.add_data({
+        #     #    :data => status_line.sort.flatten,
+        #     #    :title => status_text
+        #     #})
 
-        end
+        # end
 
         # Compile the graph
         headers["Content-Type"] = "text/html"
