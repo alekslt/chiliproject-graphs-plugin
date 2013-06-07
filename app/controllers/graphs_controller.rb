@@ -10,7 +10,7 @@ class GraphsController < ApplicationController
 
     menu_item :issues, :only => [:issue_growth, :old_issues]
 
-    before_filter :authorize_global, :except => [:recent_status_changes_graph, :recent_assigned_to_changes_graph]
+    before_filter :authorize_global, :except => [:recent_status_changes_graph, :recent_assigned_to_changes_graph, :target_version_status_graph, :target_version_status_graphjs]
     before_filter :find_version, :only => [:target_version_graph, :target_version_status_graph, :target_version_status_graphjs]
     before_filter :confirm_issues_exist, :only => [:issue_growth]
     before_filter :find_optional_project, :only => [:issue_growth_graph]
