@@ -7,7 +7,7 @@
 <%= stylesheet_link_tag('rickshaw/extensions.css', :plugin => 'chiliproject-graphs-plugin') %>
 <%= javascript_include_tag('rickshaw/vendor/d3.min.js', :plugin => 'chiliproject-graphs-plugin') %>
 <%= javascript_include_tag('rickshaw/vendor/d3.layout.min.js', :plugin => 'chiliproject-graphs-plugin') %>
-<%= javascript_include_tag('rickshaw/rickshaw.min.js', :plugin => 'chiliproject-graphs-plugin') %>
+<%= javascript_include_tag('rickshaw/rickshaw.js', :plugin => 'chiliproject-graphs-plugin') %>
 <%= javascript_include_tag 'jquery.min.js' %>
 <%= javascript_include_tag 'jquery-ui.min.js' %>
 <style>
@@ -156,6 +156,7 @@ var RenderControls = function(args) {
 
                         this.graph.configure(config);
                         this.graph.render();
+                        this.graph.update();
 
                 }.bind(this), false);
         }
