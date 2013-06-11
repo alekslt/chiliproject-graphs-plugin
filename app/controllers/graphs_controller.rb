@@ -10,8 +10,9 @@ class GraphsController < ApplicationController
 
     menu_item :issues, :only => [:issue_growth, :old_issues]
 
-    before_filter :authorize_global, :except => [:recent_status_changes_graph, :recent_assigned_to_changes_graph, :target_version_status_graph, :target_version_status_graphjs]
-    before_filter :find_version, :only => [:target_version_graph, :target_version_status_graph, :target_version_status_graphjs]
+    before_filter :authorize_global, :except => [:recent_status_changes_graph, :recent_assigned_to_changes_graph, :target_version_status_graph, :target_version_status_graphjs, :target_version_cycletimejs_graph]
+    before_filter :find_version, :only => [:target_version_graph, :target_version_status_graph, :target_version_status_graphjs, :target_version_cycletimejs_graph]
+    before_filter :size_args_check, :only => [:target_version_status_graphjs, :target_version_cycletimejs_graph]
     before_filter :confirm_issues_exist, :only => [:issue_growth]
     before_filter :find_optional_project, :only => [:issue_growth_graph]
     before_filter :find_open_issues, :only => [:old_issues, :issue_age_graph]
@@ -484,7 +485,7 @@ class GraphsController < ApplicationController
 
 
 
-    def target_version_status_graphjs
+    def size_args_check
         size='small'
         size = params[:size] if params.has_key?(:size)
 
@@ -502,8 +503,9 @@ class GraphsController < ApplicationController
             @height = 712
             @width = 1900
         end
+    end
 
-
+    def target_version_status_graphjs
         curr_status = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
         sorted_status = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]
 
@@ -665,6 +667,13 @@ class GraphsController < ApplicationController
         # Compile the graph
         headers["Content-Type"] = "text/html"
         render :layout => false
+    end
+
+
+    def target_version_cycletimejs_graph
+
+
+
     end
 
 

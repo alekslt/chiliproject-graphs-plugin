@@ -55,7 +55,6 @@ label[for=step] {
          <div id="chart_container">
                 <div id="chart"></div>
                 <div id="timeline"></div>
-                <div id="slider"></div>
         </div>
 
         <form id="side_panel">
@@ -109,7 +108,6 @@ label[for=step] {
                 <section>
                         <h6>Smoothing</h6>
                         <div id="smoother"></div>
-
                 </section>
                 <section></section>
         </form>
@@ -294,11 +292,6 @@ var graph = new Rickshaw.Graph( {
 } );
 
 graph.render();
-
-var slider = new Rickshaw.Graph.RangeSlider( {
-        graph: graph,
-        element: $('#slider')
-} );
 
 var hoverDetail = new Rickshaw.Graph.HoverDetail( {
         graph: graph

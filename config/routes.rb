@@ -10,4 +10,5 @@ ActionController::Routing::Routes.draw do |map|
   map.connect 'graphs/target-version/:id', :controller=>"graphs", :action=>"target_version_graph" 
   map.connect 'graphs/target-version-status/:id', :controller=>"graphs", :action=>"target_version_status_graph"
   map.connect 'graphs/target-version-statusjs/:id', :controller=>"graphs", :action=>"target_version_status_graphjs"
+  map.connect 'graphs/target-version-cycletimejs/:id', :controller=>"graphs", :action=>"target_version_cycletimejs_graphjs"
 end
