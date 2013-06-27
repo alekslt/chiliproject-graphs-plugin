@@ -512,7 +512,7 @@ class GraphsController < ApplicationController
         issues_by_date_status = {}
         issues_by_status_date = {}
         
-        earliest_issue_date = Date.today
+        earliest_issue_date = Date.today.to_time.to_i
 
         @version.fixed_issues.each { |issue|
             #puts "IssueId: #{issue.id}\n"
@@ -584,42 +584,66 @@ class GraphsController < ApplicationController
 
         # Set the scope of the graph
         issues_by_updated_on = @version.fixed_issues.group_by {|issue| issue.updated_on.to_date }.sort
-        @scope_end_date = issues_by_updated_on.last.first
+        @scope_end_date = Date.today
+        @scope_end_date = issues_by_updated_on.last.first if !@issues_by_updated_on.nil? 
         @scope_end_date = @version.effective_date if !@version.effective_date.nil? && @version.effective_date > @scope_end_date
         @scope_end_date = Date.today if !@version.completed?
        
-        @scope_start_date = @version.start_date
+        @scope_start_date = Date.today
+        @scope_start_date = @version.start_date if !@version.start_date.nil?
         if params.has_key?(:lastdays)
             lastdate = (@scope_end_date-Integer(params[:lastdays]))
             @scope_start_date = lastdate
         end
         
-        @line_end_date = Date.today
-        @line_end_date = @scope_end_date if @scope_end_date < @line_end_date
-        
+        # @line_end_date = Date.today
+        # @line_end_date = @scope_end_date if @scope_end_date < @line_end_date
+
+        @scope_start_date = @scope_start_date.to_time.to_i
+        @scope_end_date = @scope_end_date.to_time.to_i
         
         issues_by_date_status_sum = {}
 
         #puts "Calculating from #{earliest_issue_date} to  #{scope_end_date}\n"
 
-        (earliest_issue_date..@scope_end_date).each do |date_today|
-            #puts "Date: #{date_today}\n"
-            if issues_by_date_status.has_key?(date_today)
-                issues_by_date_status[date_today].each do |status, diff|
-                    next if status == 0
-                    curr_status[status] += diff
-                end
+        #(earliest_issue_date..@scope_end_date).each do |date_today|
+        ##    #puts "Date: #{date_today}\n"
+        #    if issues_by_date_status.has_key?(date_today)
+        #        issues_by_date_status[date_today].each do |status, diff|
+        #            next if status == 0
+        #            curr_status[status] += diff
+        #        end
+        #    end
+#
+ #           issues_by_date_status_sum[date_today] ||= {}
+#
+ #           @sorted_status.each do |status_id|
+  #              next if status_id == -1
+   #             #puts "  S_id: #{status_id} = #{curr_total}\n"
+    #            issues_by_date_status_sum[date_today][status_id] = curr_status[status_id]
+     #       end
+
+      #  end
+
+
+        issues_by_date_status.keys.sort.each do |changed_on |
+            next if changed_on < earliest_issue_date or changed_on > @scope_end_date
+
+            issues_by_date_status[changed_on].each do |status, diff|
+                next if status == 0
+                curr_status[status] += diff
             end
 
-            issues_by_date_status_sum[date_today] ||= {}
+            issues_by_date_status_sum[changed_on] ||= {}
 
             @sorted_status.each do |status_id|
                 next if status_id == -1
                 #puts "  S_id: #{status_id} = #{curr_total}\n"
-                issues_by_date_status_sum[date_today][status_id] = curr_status[status_id]
+                issues_by_date_status_sum[changed_on][status_id] = curr_status[status_id]
             end
-
         end
+
+
 
         @issues_by_status_date_sum = {}
 
@@ -684,7 +708,7 @@ class GraphsController < ApplicationController
    
         full_journal = {}
         issue.journals.each{|journal|
-            date = journal.created_on.to_date
+            date = journal.created_on.to_time.to_i
 
             ## TODO: SKIP estimated_hours and remaining_hours if not a leaf node
             journal.details.each{| prop, value |
@@ -697,7 +721,7 @@ class GraphsController < ApplicationController
                     full_journal[date]["status"] ||= []
                     full_journal[date]["status"] << {:old => value[0], :new => value[1]}
 
-                    #puts "Issue: #{issue}, Date#{date}, From #{value[0]} to #{value[1]}\n"
+                    puts "Issue: #{issue}, Date#{date}, From #{value[0]} to #{value[1]}\n"
                 else
                   raise "Unhandled property #{prop}"
                 end

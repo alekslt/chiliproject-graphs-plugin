@@ -278,7 +278,7 @@ var graph = new Rickshaw.Graph( {
                         num = date_and_count[changed_on]
                         
                         if @scope_start_date.nil? || @scope_start_date <= changed_on
-                                day = changed_on.to_time.to_i
+                                day = changed_on
                                 %>
                                 { x: <%= day %>, y: <%= num %> },
                                 <%
