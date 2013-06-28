@@ -513,6 +513,7 @@ class GraphsController < ApplicationController
         issues_by_status_date = {}
         
         earliest_issue_date = Date.today.to_time.to_i
+        latest_issue_date = 0
 
         @version.fixed_issues.each { |issue|
             #puts "IssueId: #{issue.id}\n"
@@ -525,6 +526,11 @@ class GraphsController < ApplicationController
                 if parsedDate < earliest_issue_date
                     earliest_issue_date = parsedDate
                 end
+
+                if parsedDate > latest_issue_date
+                    latest_issue_date = parsedDate
+                end
+                
 
                 issues_by_date_status[parsedDate] ||= {}
 
@@ -655,10 +661,23 @@ class GraphsController < ApplicationController
                     @issues_by_status_date_sum[status_id][date] = num
                 end
             end
-
-
         end
         
+        #
+
+        # Add a last "row" of status changes on scope_end_date to make the graph look pretty.
+        @issues_by_status_date_sum.keys.each do | status_id |
+            lastKey = @issues_by_status_date_sum[status_id].keys.sort.last
+            lastNum = @issues_by_status_date_sum[status_id][lastKey]
+            @issues_by_status_date_sum[status_id][@scope_end_date] = lastNum
+#            status_and_count.each do |status_id, num|
+#                if status_id != 0
+#                    #@issues_by_status_date_sum[status_id] ||= {}##
+#
+#                    @issues_by_status_date_sum[status_id][date] = num
+#                end
+#            end
+        end
 
         # @sorted_status.reverse.each do |status_id|
         #     next if status_id == -1
